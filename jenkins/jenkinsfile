@@ -1,31 +1,40 @@
 pipeline {
-  agent any
-  environment {
-    AWS_REGION = "ap-south-1"
-    ECR_REPO = "devops-dashboard"
-  }
-  stages {
-    stage('Checkout') {
-      steps {
-        git 'https://github.com/2021wa15539-droid/devops-dashboard.git'
-      }
+    agent any
+
+    environment {
+        AWS_REGION = "ap-south-1"
+        ECR_REPO   = "devops-dashboard"
+        ACCOUNT_ID = "011528274176"
     }
-    stage('Build Docker Image') {
-      steps {
-        bat 'docker build -t $ECR_REPO:latest ./src'
-      }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                git branch: 'master',
+                    url: 'https://github.com/2021wa15539-droid/devops-dashboard.git'
+            }
+        }
+
+        stage('Build Docker Image') {
+            steps {
+                bat 'docker build -t %ECR_REPO%:latest ./src'
+            }
+        }
+
+        stage('Push to ECR') {
+            steps {
+                bat '''
+                aws ecr get-login-password --region %AWS_REGION% | docker login --username AWS --password-stdin %ACCOUNT_ID%.dkr.ecr.%AWS_REGION%.amazonaws.com
+                docker tag %ECR_REPO%:latest %ACCOUNT_ID%.dkr.ecr.%AWS_REGION%.amazonaws.com/%ECR_REPO%:latest
+                docker push %ACCOUNT_ID%.dkr.ecr.%AWS_REGION%.amazonaws.com/%ECR_REPO%:latest
+                '''
+            }
+        }
+
+        stage('Deploy to EKS') {
+            steps {
+                bat 'kubectl apply -f k8s/deployment.yaml'
+            }
+        }
     }
-    stage('Push to ECR') {
-      steps {
-        bat 'aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin 011528274176.dkr.ecr.$AWS_REGION.amazonaws.com'
-        bat 'docker tag $ECR_REPO:latest 011528274176.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO:latest'
-        bat 'docker push 011528274176.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO:latest'
-      }
-    }
-    stage('Deploy to EKS') {
-      steps {
-        bat 'kubectl apply -f k8s/deployment.yaml'
-      }
-    }
-  }
 }
